@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib
-matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import jax
 jax.config.update("jax_enable_x64", True)
@@ -47,13 +46,16 @@ for iter in iters:
 
     end = time.perf_counter()
     times.append(end-start)
-    print(f"OPTIMIZE BINS NORMAL Execution time: {end - start:.4f} seconds")
+    print(f"OPTIMIZE BINS NUMPY Execution time: {end - start:.4f} seconds")
+    np.savez( f"result_numpy_iter_{iter}.npz", result=np.array(result), ) 
+    print( f"Saved NumPy result for iter={iter}" )
+   
 
 
 
     start = time.perf_counter()
 
-    result = opfj.optimize_bins_gen_jax(
+    result_jax = opfj.optimize_bins_gen_jax(
         nb_iter=iter,
         perturbation=float(args["perturbation"]),
         dist_roman=jnp.array(args["dist_roman"]),
@@ -78,7 +80,7 @@ for iter in iters:
         ),
     )
 
-    jax.block_until_ready(result)
+    jax.block_until_ready(result_jax)
 
     end = time.perf_counter()
     times_jax.append(end-start)
@@ -86,6 +88,10 @@ for iter in iters:
         f"OPTIMIZE BINS JAX Execution time: "
         f"{end - start:.4f} seconds"
     )
+     # Move from device -> NumPy 
+    result_jax_np = jax.device_get(result_jax) 
+    np.savez( f"result_jax_iter_{iter}.npz", result=result_jax_np, ) 
+    print( f"Saved JAX result for iter={iter}")
 
 
 
@@ -127,5 +133,5 @@ plt.grid(True, linestyle='--', alpha=0.6)
 # plt.yscale('log')
 
 plt.tight_layout()
-plt.show()
 plt.savefig("timing_comparison.png", dpi=300)
+
