@@ -7,7 +7,6 @@ import pandas as pd
 import sys
 import astropy.constants as cst
 from tqdm import tqdm
-from tqdm.notebook import tqdm
 from shutil import which
 
 import fisher_matrix_analysis as fma

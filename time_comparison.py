@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import jax
 jax.config.update("jax_enable_x64", True)
@@ -126,3 +128,4 @@ plt.grid(True, linestyle='--', alpha=0.6)
 
 plt.tight_layout()
 plt.show()
+plt.savefig("timing_comparison.png", dpi=300)
