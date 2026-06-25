@@ -83,7 +83,6 @@ def optimize_bins_gen_jax(
     use_marginalization=True,
     verbose=False,
 ):
-
     ss = fiducial_cosmo.shape[0]
 
     nbins = z_roman.shape[0]

@@ -16,6 +16,7 @@ args = np.load(
 
 
 iters = [5, 10, 25, 50, 100, 250, 500, 750, 1000]
+#iters = [100]
 times = []
 times_jax = []
 
@@ -49,8 +50,6 @@ for iter in iters:
     print(f"OPTIMIZE BINS NUMPY Execution time: {end - start:.4f} seconds")
     np.savez( f"result_numpy_iter_{iter}.npz", result=np.array(result), ) 
     print( f"Saved NumPy result for iter={iter}" )
-   
-
 
 
     start = time.perf_counter()
@@ -79,7 +78,7 @@ for iter in iters:
             args["use_marginalization"]
         ),
     )
-
+    
     jax.block_until_ready(result_jax)
 
     end = time.perf_counter()
@@ -90,10 +89,10 @@ for iter in iters:
     )
      # Move from device -> NumPy 
     result_jax_np = jax.device_get(result_jax) 
-    np.savez( f"result_jax_iter_{iter}.npz", result=result_jax_np, ) 
+    np.savez( f"result_jax_gpu_iter_{iter}.npz", result=result_jax_np, ) 
     print( f"Saved JAX result for iter={iter}")
 
-
+np.savez("timing_results_gpu.npz", nb_iter=iters, time_numpy=times, time_jax=times_jax)
 
 
 #PLOT 
@@ -133,5 +132,7 @@ plt.grid(True, linestyle='--', alpha=0.6)
 # plt.yscale('log')
 
 plt.tight_layout()
-plt.savefig("timing_comparison.png", dpi=300)
+plt.savefig("timing_comparison_gpu.png", dpi=300)
 
+
+#JAX_PLATFORMS=cpu python

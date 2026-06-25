@@ -547,7 +547,7 @@ def derivative_vector(
 
     return dmu
 
-
+"""
 @jax.jit
 def fisher_matrix_observable(
     params,
@@ -556,7 +556,7 @@ def fisher_matrix_observable(
     H0,
     h=None,
 ):
-    """
+    
     Fisher matrix from observable derivatives.
 
     Parameters
@@ -580,7 +580,7 @@ def fisher_matrix_observable(
     -------
     F : ndarray
         Fisher matrix.
-    """
+    
 
     # --------------------------------------------------------
     # parameter vector
@@ -645,5 +645,81 @@ def fisher_matrix_observable(
     # --------------------------------------------------------
 
     F = 0.5 * (F + F.T)
+    return F
+
+"""
+
+@jax.jit
+def fisher_matrix_observable(
+    params,
+    Cinv,
+    z,
+    H0,
+):
+    """
+    Fisher matrix computed using JAX automatic differentiation.
+
+    Parameters
+    ----------
+    params : ndarray
+        Fiducial parameter vector.
+
+    Cinv : ndarray
+        Inverse covariance matrix.
+
+    z : ndarray
+        Redshift array.
+
+    H0 : float
+        Hubble constant.
+
+    Returns
+    -------
+    F : ndarray
+        Fisher matrix.
+    """
+
+    # --------------------------------------------------------
+    # parameter vector
+    # --------------------------------------------------------
+
+    params = jnp.asarray(
+        params,
+        dtype=jnp.float64,
+    )
+
+    # --------------------------------------------------------
+    # Jacobian
+    #
+    # J[a, i] = dmu_a / dtheta_i
+    #
+    # shape = (ndata, npar)
+    # --------------------------------------------------------
+
+    J = jax.jacrev(
+        lambda p: theory_mb_jc(
+            p,
+            z,
+            H0,
+        )
+    )(params)
+
+    # --------------------------------------------------------
+    # Fisher matrix
+    #
+    # F_ij = (dmu/dtheta_i)^T
+    #        Cinv
+    #        (dmu/dtheta_j)
+    # --------------------------------------------------------
+
+    F = J.T @ Cinv @ J
+
+    # --------------------------------------------------------
+    # explicit symmetrization
+    # --------------------------------------------------------
+
+    F = 0.5 * (
+        F + F.T
+    )
 
     return F
