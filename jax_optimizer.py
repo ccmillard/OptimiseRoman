@@ -449,9 +449,9 @@ def make_optimizer_step(
         dist_reference_without_lsst = (dist_reference - lsst_SNIa)
         min_bin_population = perturbation
 
-        valid = (dist_reference_without_lsst[i]
-            > min_bin_population + 1.0
-            )
+        # valid = (dist_reference_without_lsst[i]
+        #     > min_bin_population + 1.0
+        #     )
 
         # Common perturbed distribution (add one SNIa in bin i)
         dist_perturbed = dist_reference.at[i].add(perturbation)
@@ -882,7 +882,7 @@ def make_optimizer_step(
 
         kk = jnp.argmin(
             masked_dFOM
-        )
+        ) # smallest dFOM 
 
         has_eligible = jnp.any(
             eligible
