@@ -341,23 +341,52 @@ def build_covariance(
         
     Returns:
         cov (jnp.array): altered covariance matrix."""
+    
+    # ------------------------------------------------------------
+    # Active bins
+    # A bin with zero SNe contains no SN information.
+    # ------------------------------------------------------------
+
+    active = dist > 0.0
+    active_float = active.astype(jnp.float64)
+
+    # This is just to avoid division by zero for inactive bins. The value of scale will not matter anyway 
+    # since the corresponding rows/columns will be zeroed out.
+    dist_safe = jnp.maximum(dist, 1.0)
 
     scale = jnp.sqrt(
-        dist_base / dist
+        dist_base / dist_safe
     )
 
+    # Statistical covariance for active bins only.
     cov_stat = (
         scale[:, None]
         * cov_stat_base
         * scale[None, :]
     )
 
-    cov = cov_stat + cov_sys
+    # Remove inactive rows/columns.
+    cov_stat = (
+        active_float[:, None]
+        * cov_stat
+        * active_float[None, :]
+    )
 
-    # cov = nearest_psd(
-    #     cov,
-    #     eps_psd,
-    # )
+    # Remove systematic covariance involving inactive bins.
+    cov_sys_active = (
+        active_float[:, None]
+        * cov_sys
+        * active_float[None, :]
+    )
+
+    cov = cov_stat + cov_sys_active
+
+    # Add a finite diagonal placeholder (1 )for zero-population bins;
+    # their Jacobian rows are masked later, so they contribute no Fisher information.
+    # active_float is 1 for active bins, 0 for inactive bins, so 1 - active_float is 1 for inactive bins.
+    cov = cov + jnp.diag(
+        1.0 - active_float
+    )
 
     return cov
 
@@ -408,10 +437,30 @@ def make_optimizer_step(
     # FISHER
     # ========================================================
 
-    def fisher_from_cinv(Cinv):
-        F = (J.T @ Cinv @ J)
-        F = 0.5 * (F + F.T)
-        # F = nearest_psd(F)
+    def fisher_from_cinv(Cinv, dist):
+        active = (
+            dist > 0.0
+        )
+
+        active_float = active.astype(
+            jnp.float64
+        )
+
+        J_active = (
+            active_float[:, None]
+            * J
+        )
+
+        F = (
+            J_active.T
+            @ Cinv
+            @ J_active
+        )
+
+        F = 0.5 * (
+            F + F.T
+        )
+
         return F
 
     # ========================================================
@@ -447,11 +496,10 @@ def make_optimizer_step(
 
         # Reference population without LSST
         dist_reference_without_lsst = (dist_reference - lsst_SNIa)
-        min_bin_population = perturbation
 
-        # valid = (dist_reference_without_lsst[i]
-        #     > min_bin_population + 1.0
-        #     )
+        valid = (dist_reference_without_lsst[i]
+            >= perturbation
+            )
 
         # Common perturbed distribution (add one SNIa in bin i)
         dist_perturbed = dist_reference.at[i].add(perturbation)
@@ -476,7 +524,7 @@ def make_optimizer_step(
 
         Cinv_perturbed = jnp.linalg.solve(Cov_perturbed,II)
 
-        FF_perturbed = fisher_from_cinv(Cinv_perturbed)
+        FF_perturbed = fisher_from_cinv(Cinv_perturbed, dist_perturbed)
 
         FOM_perturbed, _, _ = compute_fom(FF_perturbed)
 
@@ -612,7 +660,7 @@ def make_optimizer_step(
             )
 
             kk_safe = (
-                kk_population > perturbation
+                kk_population >= perturbation
             )
 
             # =================================================
@@ -642,7 +690,8 @@ def make_optimizer_step(
             # ]
             # =================================================
 
-            reallocate_mask = ~ignore # reallocate time in not ignored bins
+            reallocate_mask = ((~ignore)
+                            & (dFOM > 0.0))
 
             # =================================================
             # Denominator
@@ -712,15 +761,15 @@ def make_optimizer_step(
             # =================================================
 
             comparison = (
-                dist_after_redistribution
-                <= NIa_tot
-            ) # under upper bound
+            (dist_after_redistribution >= 0.0)
+            & (dist_after_redistribution <= NIa_tot)
+            ) # the redistribution keeps the bins above 0 and under the upper bound
 
             all_valid = jnp.all(
                 comparison
             ) # all bin population under upper bound 
 
-            problematic_bins = ~comparison # bins that delta_n_test put higher than the upper bound
+            problematic_bins = (dist_after_redistribution > NIa_tot) # bins that delta_n_test put higher than the upper bound
 
             # =================================================
             # Update ignore
@@ -968,7 +1017,8 @@ def make_optimizer_step(
         )
 
         FF_new = fisher_from_cinv(
-            Cinv_new
+            Cinv_new,
+            dist_new
         )
 
         # ====================================================
