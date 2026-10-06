@@ -474,13 +474,12 @@ def make_optimizer_step(
                 param_names)
         else:
             C = jnp.linalg.solve(F, jnp.eye(F.shape[0]))
-        # C = nearest_psd(C)
 
         ellipse = ellipse_parameters(C,0.32)
 
-        fom = 1.0 / ellipse[3]
+        fom = 1.0 / jnp.sqrt(jnp.linalg.det(C))
 
-        return fom, C, ellipse
+        return fom, ellipse
 
     # ========================================================
     # SINGLE-BIN dFOM
@@ -526,7 +525,7 @@ def make_optimizer_step(
 
         FF_perturbed = fisher_from_cinv(Cinv_perturbed, dist_perturbed)
 
-        FOM_perturbed, _, _ = compute_fom(FF_perturbed)
+        FOM_perturbed, _ = compute_fom(FF_perturbed)
 
         dFOM_i = (FOM_perturbed- FOM_reference) / tt[i]
 
@@ -1025,7 +1024,7 @@ def make_optimizer_step(
         # FOM
         # ====================================================
 
-        FOM_new, CC_new, ellipse_new = (
+        FOM_new, ellipse_new = (
             compute_fom(
                 FF_new
             )
@@ -1215,7 +1214,7 @@ def optimize_bins_again_jax(
     # TRACKERS
     # ========================================================
 
-    track_ellipse = []
+    track_FOM = []
     track_FF = []
     track_distribution = []
     track_delta_n = []
@@ -1303,8 +1302,8 @@ def optimize_bins_again_jax(
                     tracking["FF"]
                 )
 
-                track_ellipse.append(
-                    tracking["ellipse"]
+                track_FOM.append(
+                    tracking["FOM"]
                 )
 
                 # track_stalled.append(
@@ -1379,8 +1378,8 @@ def optimize_bins_again_jax(
         axis=0,
     )
 
-    track_ellipse = jnp.stack(
-        track_ellipse,
+    track_FOM = jnp.stack(
+        track_FOM,
         axis=0,
     )
 
@@ -1439,8 +1438,8 @@ def optimize_bins_again_jax(
         "track_FF":
             track_FF,
 
-        "track_ellipse":
-            track_ellipse,
+        "track_FOM":
+            track_FOM,
 
         # "track_stalled":
         #     track_stalled,
