@@ -69,31 +69,39 @@ def theory_mb_jc(params, z, H0):
 
     return mu + Mb # apparent magnitude
 
+
 @jax.jit
-def chi2(params,z,data_obs,cov_inv,H0):
+def chi2(params, z, data_obs, cov_inv, H0):
     """
     Jax computation of the chi-square. The flat CPL cosmology is hard-coded.
     
     Parameters:
-        params (jnp.array): array of parameters Om0, w0, wa, Mb.
-        z (jnp.array): array of redshifts.
+        params (jnp.array): parameters Om0, w0, wa, Mb.
+        z (jnp.array): redshift array.
         data_obs (jnp.array): observed dataset, here: apparent magnitude of SNIa (mb)
-        cov (jnp.ndarray): covariance matrix of observation
+        cov_inv (jnp.array): inverse covariance matrix.
         H0: Hubble constant in km/s/Mpc.
 
 
     Returns:
         chi2 (float): chi square
     """
-    # theory
-    mb_theory = theory_mb_jc(params,z,H0)
 
-    #residuals 
+    # theory
+    mb_theory = theory_mb_jc(
+        params,
+        z,
+        H0,
+    )
+
+    # residuals 
     r = data_obs - mb_theory
 
-    #chi2
-    chi2 = r @ cov_inv @ r    
+    # chi2
+    chi2 = r @ cov_inv @ r
+
     return chi2
+
 
 @jax.jit
 def fisher_matrix_hessian(
@@ -116,11 +124,18 @@ def fisher_matrix_hessian(
             H0
         )
 
-    hessian_loglike = jax.jit(jax.hessian(loglike_local))
+    hessian_loglike = jax.jit(
+        jax.hessian(loglike_local)
+    )
 
-    F = -jnp.asarray(hessian_loglike(jnp.asarray(params)))
+    F = -jnp.asarray(
+        hessian_loglike(
+            jnp.asarray(params)
+        )
+    )
 
     return F
+
 
 @jax.jit
 def fisher_matrix_observable(
@@ -136,7 +151,7 @@ def fisher_matrix_observable(
         params (jnp.array): fiducial parameter vector.
         cov_inv (jnp.array): inverse covariance matrix.
         z (jnp.array): redshift array.
-        H0 (float): Hubble constant in km/s/Mpc.
+        H0: Hubble constant in km/s/Mpc.
 
     Returns:
     F (jnp.array): Fisher matrix.
@@ -161,7 +176,7 @@ def fisher_matrix_observable(
 
     # Fisher matrix
     # F_ij = (dmu/dtheta_i)^T
-    #        cov_in
+    #        cov_inv
     #        (dmu/dtheta_j)
 
     F = J.T @ cov_inv @ J
@@ -170,6 +185,7 @@ def fisher_matrix_observable(
     F = 0.5 * (F + F.T)
 
     return F
+
 
 def marginalize_fisher_matrix(
     fisher_matrix,
@@ -190,7 +206,9 @@ def marginalize_fisher_matrix(
     """
 
     # invert Fisher matrix
-    fisher_cov = jnp.linalg.inv(fisher_matrix)
+    fisher_cov = jnp.linalg.inv(
+        fisher_matrix
+    )
 
     # parameter lookup
     param_index = {
@@ -199,7 +217,10 @@ def marginalize_fisher_matrix(
     }
 
     selected_indices = jnp.array(
-        [param_index[p] for p in param_tuple]
+        [
+            param_index[p]
+            for p in param_tuple
+        ]
     )
 
     # extract marginalized covariance block
@@ -221,8 +242,12 @@ def is_positive_definite(C):
     Returns:
         (bool): True if C is positive semi-definite.
     """
+
     eigvals = jnp.linalg.eigvalsh(C)
-    return jnp.all(eigvals > 0)
+
+    return jnp.all(
+        eigvals > 0
+    )
 
 
 def ellipse_parameters(
@@ -255,13 +280,18 @@ def ellipse_parameters(
     eigenvalues, eigenvectors = jnp.linalg.eigh(C)
 
     # sort descending
-    order = jnp.argsort(eigenvalues)[::-1]
+    order = jnp.argsort(
+        eigenvalues
+    )[::-1]
 
     eigenvalues = eigenvalues[order]
     eigenvectors = eigenvectors[:, order]
 
     # numerical stabilization
-    eigenvalues = jnp.maximum(eigenvalues, epsilon)
+    eigenvalues = jnp.maximum(
+        eigenvalues,
+        epsilon
+    )
 
     lambda1 = eigenvalues[0]
     lambda2 = eigenvalues[1]
@@ -273,44 +303,63 @@ def ellipse_parameters(
     chi2_quantile = -2.0 * jnp.log(alpha)
 
     # ellipse geometry
-    width = jnp.sqrt(chi2_quantile * lambda1)
-    height = jnp.sqrt(chi2_quantile * lambda2)
+    width = jnp.sqrt(
+        chi2_quantile * lambda1
+    )
+
+    height = jnp.sqrt(
+        chi2_quantile * lambda2
+    )
+
     theta = jnp.degrees(
         jnp.arctan2(
             eigenvectors[1, 0],
             eigenvectors[0, 0],
         )
     )
+
     area = jnp.pi * width * height
 
     return jnp.array([
-    width,
-    height,
-    theta,
-    area,
+        width,
+        height,
+        theta,
+        area,
     ])
+
 
 #--------------------------------------------------------------------------------------------------------
 #--------------------------------------------- OPTIMIZER ------------------------------------------------
 #--------------------------------------------------------------------------------------------------------
 
 @jax.jit
-def nearest_psd(A, eps=1e-10):
+def nearest_psd(
+    A,
+    eps=1e-10
+):
     """
-    Changes a matrix to the nearest postive semi-definite alternative.
+    Changes a matrix to the nearest positive semi-definite alternative.
     
     Parameters:
         A (jnp.array): matrix.
         eps (float): eigenvalue clipping. Default 1e-10.
         
     Returns:
-        (jnp.array): neartest psd matrix"""
+        (jnp.array): nearest psd matrix
+    """
 
-    A = 0.5 * (A + A.T)
+    A = 0.5 * (
+        A + A.T
+    )
 
-    eigvals, eigvecs = jnp.linalg.eigh(A)
+    eigvals, eigvecs = jnp.linalg.eigh(
+        A
+    )
 
-    eigvals = jnp.maximum(eigvals, eps)
+    eigvals = jnp.maximum(
+        eigvals,
+        eps
+    )
 
     A_psd = (
         eigvecs
@@ -318,7 +367,10 @@ def nearest_psd(A, eps=1e-10):
         @ eigvecs.T
     )
 
-    return 0.5 * (A_psd + A_psd.T)
+    return 0.5 * (
+        A_psd + A_psd.T
+    )
+
 
 @jax.jit
 def build_covariance(
@@ -340,7 +392,8 @@ def build_covariance(
         eps_psd (float): eigenvalue clipping. Default 1e-10.
         
     Returns:
-        cov (jnp.array): altered covariance matrix."""
+        cov (jnp.array): altered covariance matrix.
+    """
     
     # ------------------------------------------------------------
     # Active bins
@@ -348,11 +401,18 @@ def build_covariance(
     # ------------------------------------------------------------
 
     active = dist > 0.0
-    active_float = active.astype(jnp.float64)
 
-    # This is just to avoid division by zero for inactive bins. The value of scale will not matter anyway 
-    # since the corresponding rows/columns will be zeroed out.
-    dist_safe = jnp.maximum(dist, 1.0)
+    active_float = active.astype(
+        jnp.float64
+    )
+
+    # This is just to avoid division by zero for inactive bins.
+    # The value of scale will not matter anyway since the
+    # corresponding rows/columns will be zeroed out.
+    dist_safe = jnp.maximum(
+        dist,
+        1.0
+    )
 
     scale = jnp.sqrt(
         dist_base / dist_safe
@@ -379,16 +439,22 @@ def build_covariance(
         * active_float[None, :]
     )
 
-    cov = cov_stat + cov_sys_active
+    cov = (
+        cov_stat
+        + cov_sys_active
+    )
 
-    # Add a finite diagonal placeholder (1 )for zero-population bins;
+    # Add a finite diagonal placeholder (1) for zero-population bins;
     # their Jacobian rows are masked later, so they contribute no Fisher information.
-    # active_float is 1 for active bins, 0 for inactive bins, so 1 - active_float is 1 for inactive bins.
-    cov = cov + jnp.diag(
-        1.0 - active_float
+    cov = (
+        cov
+        + jnp.diag(
+            1.0 - active_float
+        )
     )
 
     return cov
+
 
 # ============================================================
 # ONE OPTIMIZATION ITERATION
@@ -423,21 +489,23 @@ def make_optimizer_step(
     # ========================================================
     # COSMOLOGICAL JACOBIAN
     # ========================================================
-    #
-    # This is independent of the covariance/distribution, so
-    # calculate it once.
-    #
-    # This replaces the repeated calls to
-    # fma.fisher_matrix_observable() in the NumPy implementation.
-    # ========================================================
 
-    J = jax.jacrev(lambda p: theory_mb_jc(p,z_roman,H0,))(fiducial_cosmo)
+    J = jax.jacrev(
+        lambda p: theory_mb_jc(
+            p,
+            z_roman,
+            H0,
+        )
+    )(fiducial_cosmo)
 
     # ========================================================
     # FISHER
     # ========================================================
 
-    def fisher_from_cinv(Cinv, dist):
+    def fisher_from_cinv(
+        Cinv,
+        dist
+    ):
         active = (
             dist > 0.0
         )
@@ -466,18 +534,34 @@ def make_optimizer_step(
     # ========================================================
     # FOM
     # ========================================================
+
     def compute_fom(F):
+
         if use_marginalization:
+
             C = marginalize_fisher_matrix(
                 F,
                 param_tuple,
-                param_names)
+                param_names
+            )
+
         else:
-            C = jnp.linalg.solve(F, jnp.eye(F.shape[0]))
 
-        ellipse = ellipse_parameters(C,0.32)
+            C = jnp.linalg.solve(
+                F,
+                jnp.eye(
+                    F.shape[0]
+                )
+            )
 
-        fom = 1.0 / jnp.sqrt(jnp.linalg.det(C))
+        ellipse = ellipse_parameters(
+            C,
+            0.32
+        )
+
+        fom = 1.0 / jnp.sqrt(
+            jnp.linalg.det(C)
+        )
 
         return fom, ellipse
 
@@ -485,7 +569,11 @@ def make_optimizer_step(
     # SINGLE-BIN dFOM
     # ========================================================
 
-    def compute_single_bin_gradient(i,dist_reference,FOM_reference):
+    def compute_single_bin_gradient(
+        i,
+        dist_reference,
+        FOM_reference
+    ):
         """
         Direct JAX equivalent of the NumPy loop
         "for i in range(len(z_roman)):"
@@ -494,22 +582,26 @@ def make_optimizer_step(
         """
 
         # Reference population without LSST
-        dist_reference_without_lsst = (dist_reference - lsst_SNIa)
+        dist_reference_without_lsst = (
+            dist_reference
+            - lsst_SNIa
+        )
 
-        valid = (dist_reference_without_lsst[i]
+        valid = (
+            dist_reference_without_lsst[i]
             >= perturbation
-            )
+        )
 
-        # Common perturbed distribution (add one SNIa in bin i)
-        dist_perturbed = dist_reference.at[i].add(perturbation)
-        
+        # Common perturbed distribution
+        # (add one SNIa in bin i)
+        dist_perturbed = (
+            dist_reference
+            .at[i]
+            .add(perturbation)
+        )
 
         # ----------------------------------------------------
         # Calculate perturbed FOM
-        # IMPORTANT:
-        # The NumPy implementation calculates dFOM even for
-        # bins which are subsequently excluded from kk.
-        # Therefore we retain that behavior.
         # ----------------------------------------------------
 
         Cov_perturbed = build_covariance(
@@ -519,32 +611,50 @@ def make_optimizer_step(
             Cov_sys,
         )
 
-        Cov_perturbed = 0.5 * (Cov_perturbed + Cov_perturbed.T)
+        Cov_perturbed = 0.5 * (
+            Cov_perturbed
+            + Cov_perturbed.T
+        )
 
-        Cinv_perturbed = jnp.linalg.solve(Cov_perturbed,II)
+        Cinv_perturbed = jnp.linalg.solve(
+            Cov_perturbed,
+            II
+        )
 
-        FF_perturbed = fisher_from_cinv(Cinv_perturbed, dist_perturbed)
+        FF_perturbed = fisher_from_cinv(
+            Cinv_perturbed,
+            dist_perturbed
+        )
 
-        FOM_perturbed, _ = compute_fom(FF_perturbed)
+        FOM_perturbed, _ = compute_fom(
+            FF_perturbed
+        )
 
-        dFOM_i = (FOM_perturbed- FOM_reference) / tt[i]
+        dFOM_i = (
+            FOM_perturbed
+            - FOM_reference
+        ) / tt[i]
 
         # ----------------------------------------------------
         # dFOM_triche
-        # NumPy:
-        # if population > perturbation + 1:
-        #     dFOM_triche[i] = dFOM[i]
-        # else:
-        #     dFOM_triche[i] = np.nan
+        #
+        # Only bins satisfying the population constraint
+        # are eligible for removal.
         # ----------------------------------------------------
 
-        dFOM_triche_i = jnp.where(valid,dFOM_i,np.nan,)
+        dFOM_triche_i = jnp.where(
+            valid,
+            dFOM_i,
+            jnp.nan,
+        )
 
-        return (dFOM_i,dFOM_triche_i)
-    
+        return (
+            dFOM_i,
+            dFOM_triche_i
+        )
+
     # ========================================================
     # VMAP OVER BINS
-    # JAX computation of the gradient over all bins 
     # ========================================================
 
     vmapped_gradient = jax.vmap(
@@ -565,24 +675,33 @@ def make_optimizer_step(
         JAX equivalent of:
         "while valid == False:"
         from the NumPy implementation.
-        `ignore` is represented as a boolean mask.
+
+        Negative dFOM bins are allowed to be selected for
+        removal, but cannot receive redistributed SNe.
         """
 
         # ----------------------------------------------------
         # Initial ignore
-        # NumPy:
-        # gg = np.where(dFOM < 0)[0]
-        # ignore = np.unique(np.sort(np.append(gg, kk)))
+        #
+        # Negative dFOM bins cannot receive redistributed SNe.
+        # kk is also excluded from receiving its own SNe back.
         # ----------------------------------------------------
 
         negative_mask = (
             dFOM < 0.0
         )
 
-        ignore_initial = (negative_mask.at[kk].set(True))
+        ignore_initial = (
+            negative_mask
+            .at[kk]
+            .set(True)
+        )
 
         # Initial state
-        initial_delta_n = jnp.zeros(nbins,dtype=jnp.float64)
+        initial_delta_n = jnp.zeros(
+            nbins,
+            dtype=jnp.float64
+        )
 
         initial_state = (
             dist_reference,
@@ -590,15 +709,14 @@ def make_optimizer_step(
             ignore_initial,
             jnp.array(False),  # valid
             jnp.array(False),  # stalled
-            jnp.array(0, dtype=jnp.int32),
+            jnp.array(
+                0,
+                dtype=jnp.int32
+            ),
         )
 
         # ----------------------------------------------------
         # Maximum number of attempts
-        # Every unsuccessful iteration must either:
-        # 1. add at least one problematic bin to ignore, or
-        # 2. stall.
-        # Therefore nbins + 1 is sufficient.
         # ----------------------------------------------------
 
         max_steps = nbins + 1
@@ -640,14 +758,12 @@ def make_optimizer_step(
             ) = state
 
             # =================================================
-            # Equivalent to:
-            # dist_new_test = np.copy(dist_reference)
-            # dist_new_test_without_lsst =
-            #       dist_new_test - lsst_SNIa
+            # Distribution without LSST
             # =================================================
 
             dist_new_test_without_lsst = (
-                dist_reference - lsst_SNIa
+                dist_reference
+                - lsst_SNIa
             )
 
             # =================================================
@@ -659,7 +775,8 @@ def make_optimizer_step(
             )
 
             kk_safe = (
-                kk_population >= perturbation
+                kk_population
+                >= perturbation
             )
 
             # =================================================
@@ -677,25 +794,24 @@ def make_optimizer_step(
             # =================================================
 
             time_saved = (
-                tt[kk] * perturbation
+                tt[kk]
+                * perturbation
             )
 
             # =================================================
             # Reallocation mask
-            # NumPy:
-            # reallocate = [
-            #     j for j in range(len(z_roman))
-            #     if j not in ignore
-            # ]
+            #
+            # Only positive dFOM bins can receive SNe.
+            # Negative dFOM bins remain excluded.
             # =================================================
 
-            reallocate_mask = ((~ignore)
-                            & (dFOM > 0.0))
+            reallocate_mask = (
+                (~ignore)
+                & (dFOM > 0.0)
+            )
 
             # =================================================
             # Denominator
-            # NumPy:
-            # denom = np.sum(dFOM[reallocate])
             # =================================================
 
             denom = jnp.sum(
@@ -704,27 +820,24 @@ def make_optimizer_step(
                     dFOM,
                     0.0,
                 )
-            ) # sum dFOM on valid bins
+            )
 
             denominator_valid = (
                 jnp.isfinite(denom)
-                & (jnp.abs(denom)
+                & (
+                    jnp.abs(denom)
                     > 1e-14
                 )
-            ) # finite and not null
+            )
 
             safe_denom = jnp.where(
                 denominator_valid,
                 denom,
                 1.0,
-            )  # if denominator unvalid, set to 1
+            )
 
             # =================================================
             # delta_n
-            # NumPy:
-            # delta_n[j] =
-            #   perturbation * tt[kk] / tt[j]
-            #   * dFOM[j] / denom
             # =================================================
 
             delta_n_test = (
@@ -739,7 +852,7 @@ def make_optimizer_step(
                 reallocate_mask,
                 delta_n_test,
                 0.0,
-            ) # only add in bins valid for reallocation
+            )
 
             # =================================================
             # New distribution without LSST
@@ -752,23 +865,24 @@ def make_optimizer_step(
 
             # =================================================
             # NIa_tot constraint
-            # NumPy:
-            # comparison = np.less_equal(
-            #     dist_new_test_without_lsst,
-            #     NIa_tot
-            # )
             # =================================================
 
             comparison = (
-            (dist_after_redistribution >= 0.0)
-            & (dist_after_redistribution <= NIa_tot)
-            ) # the redistribution keeps the bins above 0 and under the upper bound
+                (dist_after_redistribution >= 0.0)
+                & (
+                    dist_after_redistribution
+                    <= NIa_tot
+                )
+            )
 
             all_valid = jnp.all(
                 comparison
-            ) # all bin population under upper bound 
+            )
 
-            problematic_bins = (dist_after_redistribution > NIa_tot) # bins that delta_n_test put higher than the upper bound
+            problematic_bins = (
+                dist_after_redistribution
+                > NIa_tot
+            )
 
             # =================================================
             # Update ignore
@@ -777,8 +891,7 @@ def make_optimizer_step(
             new_ignore = (
                 ignore
                 | problematic_bins
-            ) # Create new_ignore containing all elements that are in either ignore or problematic_bins, 
-            # with duplicates automatically removed.
+            )
 
             # =================================================
             # Did ignore actually change?
@@ -796,7 +909,7 @@ def make_optimizer_step(
                 kk_safe
                 & denominator_valid
                 & all_valid
-            ) # new distribution is valid
+            )
 
             # =================================================
             # Stalling
@@ -804,12 +917,12 @@ def make_optimizer_step(
 
             all_ignored = jnp.all(
                 new_ignore
-            ) # all bins are in ignore
+            )
 
             no_progress = (
                 ~new_valid
                 & ~mask_changed
-            ) # new distribution is unvalid and no new unvalid bin was identified
+            )
 
             new_stalled = (
                 ~new_valid
@@ -817,8 +930,7 @@ def make_optimizer_step(
                     all_ignored
                     | no_progress
                 )
-            ) # if new redistribution is unvalid AND either all bins are ignored or no progress 
-            # was done in identifying invalid bins, then the new redistribution stalled 
+            )
 
             # =================================================
             # Add LSST back
@@ -881,7 +993,7 @@ def make_optimizer_step(
                 (~valid)
                 & (step >= max_steps)
             )
-        ) # stall when stall or too many stepped occured and the latest new distribution is still unvalid
+        )
 
         return (
             dist_new,
@@ -898,6 +1010,7 @@ def make_optimizer_step(
     def optimizer_step(
         dist_reference,
         FOM_reference,
+        rng_key,
     ):
 
         # ====================================================
@@ -913,27 +1026,88 @@ def make_optimizer_step(
         )
 
         # ====================================================
-        # Find kk
-        # NumPy:
-        # kk = np.nanargmin(dFOM_triche)
+        # Select kk probabilistically
+        #
+        # A bin is eligible for REMOVAL if:
+        #
+        #   1. dFOM_triche is finite
+        #
+        # Negative dFOM is allowed.
+        #
+        # Probability:
+        #
+        #   P_i ∝ exp(-beta * dFOM_i)
+        #
+        # Therefore:
+        #   smaller dFOM -> larger probability
+        #   negative dFOM -> particularly favored
         # ====================================================
 
         eligible = jnp.isfinite(
             dFOM_triche
-        ) # not nan, i.e. not too close to min_bin_population
-
-        masked_dFOM = jnp.where(
-            eligible,
-            dFOM_triche,
-            jnp.inf,
-        ) # replace nan by +inf
-
-        kk = jnp.argmin(
-            masked_dFOM
-        ) # smallest dFOM 
+        )
 
         has_eligible = jnp.any(
             eligible
+        )
+
+        beta = 1.0
+
+        # ----------------------------------------------------
+        # Log weights
+        # ----------------------------------------------------
+
+        log_weights = (
+            -beta * dFOM
+        )
+
+        # Only eligible bins contribute to the maximum.
+        max_log_weight = jnp.max(
+            jnp.where(
+                eligible,
+                log_weights,
+                -jnp.inf,
+            )
+        )
+
+        # ----------------------------------------------------
+        # Exponentiate after subtracting the maximum.
+        #
+        # This prevents overflow/underflow for large dFOM.
+        # ----------------------------------------------------
+
+        weights = jnp.where(
+            eligible,
+            jnp.exp(
+                log_weights
+                - max_log_weight
+            ),
+            0.0,
+        )
+
+        weight_sum = jnp.sum(
+            weights
+        )
+
+        probabilities = jnp.where(
+            weight_sum > 0.0,
+            weights / weight_sum,
+            jnp.zeros_like(weights),
+        )
+
+        # ----------------------------------------------------
+        # Randomly select kk
+        # ----------------------------------------------------
+
+        rng_key, subkey = jax.random.split(
+            rng_key
+        )
+
+        kk = jax.random.choice(
+            subkey,
+            nbins,
+            shape=(),
+            p=probabilities,
         )
 
         # ====================================================
@@ -975,20 +1149,17 @@ def make_optimizer_step(
             redistribution_branch,
             stalled_branch,
             operand=None,
-        ) # if dist has at least one bin eligible for removal, then execute redistribution_branch, 
-        # otherwise execute stalled_branch
+        )
 
         # ====================================================
         # If redistribution stalled, preserve state
-        # This is the JAX equivalent of returning/stopping
-        # rather than accepting an invalid distribution.
         # ====================================================
 
         dist_new = jnp.where(
             stalled,
             dist_reference,
             dist_new,
-        ) # if stalled keep dist_reference, otherwise update to dist_new
+        )
 
         # ====================================================
         # New covariance
@@ -1060,7 +1231,10 @@ def make_optimizer_step(
     # JIT ONE ITERATION
     # ========================================================
 
-    return jax.jit(optimizer_step)
+    return jax.jit(
+        optimizer_step
+    )
+
 
 # ============================================================
 # MAIN OPTIMIZER
@@ -1151,6 +1325,7 @@ def optimize_bins_again_jax(
     # ========================================================
 
     nbins = z_roman.shape[0]
+
     ss = fiducial_cosmo.shape[0]
 
     # ========================================================
@@ -1175,11 +1350,13 @@ def optimize_bins_again_jax(
     # Cov_stat_base = nearest_psd(
     #     Cov_roman_stat
     # )
+
     Cov_stat_base = Cov_roman_stat
 
     # Cov_sys = nearest_psd(
     #     Cov_roman_sys
     # )
+
     Cov_sys = Cov_roman_sys
 
     II = jnp.eye(
@@ -1218,10 +1395,15 @@ def optimize_bins_again_jax(
     track_FF = []
     track_distribution = []
     track_delta_n = []
+
     # track_Cov = []
+
     track_dFOM = []
+
     # track_dFOM_triche = []
+
     track_kk = []
+
     # track_stalled = []
     # track_redistribution_valid = []
     # track_ignore = []
@@ -1231,7 +1413,16 @@ def optimize_bins_again_jax(
     # ========================================================
 
     dist_reference = dist_roman
+
     FOM_reference = FOM
+
+    # ========================================================
+    # RANDOM NUMBER GENERATOR
+    # ========================================================
+
+    rng_key = jax.random.PRNGKey(
+        42
+    )
 
     # ========================================================
     # PROGRESS BAR
@@ -1246,6 +1437,14 @@ def optimize_bins_again_jax(
         for nn in pbar:
 
             # =================================================
+            # RANDOM KEY FOR THIS ITERATION
+            # =================================================
+
+            rng_key, subkey = jax.random.split(
+                rng_key
+            )
+
+            # =================================================
             # ONE JIT-COMPILED ITERATION
             # =================================================
 
@@ -1256,13 +1455,11 @@ def optimize_bins_again_jax(
             ) = optimizer_step_jax(
                 dist_reference,
                 FOM_reference,
+                subkey,
             )
 
             # =================================================
             # FORCE SYNCHRONIZATION
-            # This is intentional.
-            # It means tqdm represents completed iterations,
-            # rather than merely dispatched asynchronous work.
             # =================================================
 
             jax.block_until_ready(
@@ -1272,8 +1469,11 @@ def optimize_bins_again_jax(
             # =================================================
             # STORE TRACKING
             # =================================================
+
             save_every = 100
+
             if nn % save_every == 0:
+
                 track_distribution.append(
                     tracking["distribution"]
                 )
@@ -1320,8 +1520,6 @@ def optimize_bins_again_jax(
 
             # =================================================
             # PROGRESS BAR INFO
-            # These are ordinary Python operations, not
-            # jax.debug.print callbacks.
             # =================================================
 
             if verbose:
@@ -1406,7 +1604,9 @@ def optimize_bins_again_jax(
         jnp.round(
             dist_reference
         )
-        .astype(jnp.int64)
+        .astype(
+            jnp.int64
+        )
     )
 
     # ========================================================
@@ -1450,4 +1650,3 @@ def optimize_bins_again_jax(
         # "track_ignore":
         #     track_ignore,
     }
-
